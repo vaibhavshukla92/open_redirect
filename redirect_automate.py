@@ -81,8 +81,12 @@ parameters = [
 
 redirection_website = "https://www.google.com"
 
-with open('urls.txt', 'r') as file:
-    urls = file.read().splitlines()
+try:
+    with open('urls.txt', 'r', encoding='latin-1') as file:
+        urls = file.read().splitlines()
+except FileNotFoundError:
+    print("urls.txt file not found or unable to open.")
+    exit(1)
 
 for url in urls:
     try:
