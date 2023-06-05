@@ -88,22 +88,35 @@ except FileNotFoundError:
     print("urls.txt file not found or unable to open.")
     exit(1)
 
+open_redirect_urls = []
+
 for url in urls:
     try:
         parsed_url = urlparse(url)
         query_params = parse_qs(parsed_url.query)
         existing_params = set(query_params.keys()).intersection(parameters)
 
-        for param in existing_params:
-            query_params[param] = query_params[param][0] + redirection_website
+        if existing_params:
+            for param in existing_params:
+                query_params[param] = query_params[param][0] + redirection_website
 
-        updated_query = urlencode(query_params, doseq=True)
-        updated_url = urlunparse(parsed_url._replace(query=updated_query))
+            updated_query = urlencode(query_params, doseq=True)
+            updated_url = urlunparse(parsed_url._replace(query=updated_query))
 
-        response = requests.get(updated_url, allow_redirects=False, verify=False)
-        if response.status_code == 302 and redirection_website in response.headers.get('Location', ''):
-            print(colored(f"Open redirect vulnerability found: {updated_url}", 'red'))
+            response = requests.get(updated_url, allow_redirects=False, verify=False)
+            if response.status_code == 302 and redirection_website in response.headers.get('Location', ''):
+                open_redirect_urls.append(updated_url)
+                print(colored(f"Open redirect vulnerability found: {updated_url}", 'red'))
+            else:
+                print(colored(f"No open redirect vulnerability: {updated_url}", 'green'))
         else:
-            print(colored(f"No open redirect vulnerability: {updated_url}", 'green'))
+            print(colored(f"Ignoring URL: {url} (No query parameters to test)", 'yellow'))
     except urllib3.exceptions.SSLError:
         print(colored(f"Ignoring URL due to SSL certificate error: {url}", 'yellow'))
+
+if open_redirect_urls:
+    with open('openredirect.txt', 'w') as file:
+        file.write("\n".join(open_redirect_urls))
+        print("URLs with open redirect vulnerabilities saved to openredirect.txt.")
+else:
+    print("No URLs with open redirect vulnerabilities found.")
