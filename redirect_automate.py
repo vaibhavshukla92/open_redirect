@@ -1,122 +1,62 @@
+import re
 import requests
-from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
-from termcolor import colored
-import urllib3
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# Disable insecure request warnings
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-parameters = [
-    "?next=",
-    "?url=",
-    "?target=",
-    "?rurl=",
-    "?dest=",
-    "?destination=",
-    "?redir=",
-    "?redirect_uri=",
-    "?redirect_url=",
-    "?redirect=",
-    "/redirect/",
-    "/cgi-bin/redirect.cgi?",
-    "/out/",
-    "/out?",
-    "?view=",
-    "/login?to=",
-    "?image_url=",
-    "?go=",
-    "?return=",
-    "?returnTo=",
-    "?return_to=",
-    "?checkout_url=",
-    "?continue=",
-    "?return_path=",
-    "success=",
-    "data=",
-    "qurl=",
-    "login=",
-    "logout=",
-    "ext=",
-    "clickurl=",
-    "goto=",
-    "rit_url=",
-    "forward_url=",
-    "forward=",
-    "pic=",
-    "callback_url=",
-    "jump=",
-    "jump_url=",
-    "click?u=",
-    "originUrl=",
-    "origin=",
-    "Url=",
-    "desturl=",
-    "u=",
-    "page=",
-    "u1=",
-    "action=",
-    "action_url=",
-    "Redirect=",
-    "sp_url=",
-    "service=",
-    "recurl=",
-    "j?url=",
-    "url=",
-    "uri=",
-    "u=",
-    "allinurl:",
-    "q=",
-    "link=",
-    "src=",
-    "tc?src=",
-    "linkAddress=",
-    "location=",
-    "burl=",
-    "request=",
-    "backurl=",
-    "RedirectUrl=",
-    "Redirect=",
-    "ReturnUrl=",
-    "redirecturl="
+# List of parameter names
+parameter_names = [
+    'url', 'target', 'rurl', 'dest', 'destination', 'redir', 'redirect_uri',
+    'redirect_url', 'redirect', '/redirect/', '/cgi-bin/redirect.cgi', '/out/',
+    '/out', 'view', '/loginto', 'image_url', 'go', 'return', 'returnTo',
+    'return_to', 'checkout_url', 'continue', 'return_path', 'success', 'data',
+    'qurl', 'login', 'logout', 'ext', 'clickurl', 'goto', 'rit_url',
+    'forward_url', 'forward', 'pic', 'callback_url', 'jump', 'jump_url',
+    'clicku', 'originUrl', 'origin', 'Url', 'desturl', 'u', 'page', 'u1',
+    'action', 'action_url', 'Redirect', 'sp_url', 'service', 'recurl',
+    'j?url', 'url=//', 'uri', 'u', 'allinurl:', 'q', 'link', 'src', 'tc?src',
+    'linkAddress', 'location', 'burl', 'request', 'backurl', 'RedirectUrl',
+    'Redirect', 'ReturnUrl', 'redirecturl'
 ]
 
-redirection_website = "https://www.google.com"
+# Read URLs from file
+with open('urls.txt', 'r') as file:
+    urls = file.read().splitlines()
 
-try:
-    with open('urls.txt', 'r', encoding='latin-1') as file:
-        urls = file.read().splitlines()
-except FileNotFoundError:
-    print("urls.txt file not found or unable to open.")
-    exit(1)
-
-open_redirect_urls = []
-
+# Check URLs for keywords and test for open redirection
 for url in urls:
-    try:
-        parsed_url = urlparse(url)
-        query_params = parse_qs(parsed_url.query)
-        existing_params = set(query_params.keys()).intersection(parameters)
+    found_keyword = False
+    redirect_url = 'https://www.google.com'
 
-        if existing_params:
-            for param in existing_params:
-                query_params[param] = query_params[param][0] + redirection_website
+    # Check if URL contains any keyword
+    for keyword in parameter_names:
+        pattern = r'([?&])(' + re.escape(keyword) + r'=)'
+        match = re.search(pattern, url)
 
-            updated_query = urlencode(query_params, doseq=True)
-            updated_url = urlunparse(parsed_url._replace(query=updated_query))
+        if match:
+            found_keyword = True
+            url = re.sub(r'(\?|&)' + re.escape(keyword) + '=([^&]*)', r'\1' + keyword + '=' + redirect_url, url)
+            break
 
-            response = requests.get(updated_url, allow_redirects=False, verify=False)
-            if response.status_code == 302 and redirection_website in response.headers.get('Location', ''):
-                open_redirect_urls.append(updated_url)
-                print(colored(f"Open redirect vulnerability found: {updated_url}", 'red'))
-            else:
-                print(colored(f"No open redirect vulnerability: {updated_url}", 'green'))
+    if found_keyword:
+        # Test for open redirection by redirecting to www.google.com
+        try:
+            response = requests.get(url, allow_redirects=False, verify=False)
+        except requests.exceptions.RequestException as e:
+            print('\033[91m[Error]\033[0m', url, '--', str(e))
+            continue
+
+        # Analyze the response to determine vulnerability
+        if response.status_code == 302 and redirect_url in response.headers.get('Location', ''):
+            print('\033[91m[Vulnerable]\033[0m', url)  # Print in red for vulnerable ones
         else:
-            print(colored(f"Ignoring URL: {url} (No query parameters to test)", 'yellow'))
-    except urllib3.exceptions.SSLError:
-        print(colored(f"Ignoring URL due to SSL certificate error: {url}", 'yellow'))
+            if response.status_code == 301 and redirect_url in response.headers.get('Location', ''):
+                print('\033[91m[Vulnerable]\033[0m', url)  # Print in red for vulnerable ones
+            else: 
+                print('\033[92m[Non-Vulnerable]\033[0m', url)  # Print in green for non-vulnerable ones
+    else:
+        print('\033[97m[Ignored]\033[0m', url)  # Print in white for ignored ones
 
-if open_redirect_urls:
-    with open('openredirect.txt', 'w') as file:
-        file.write("\n".join(open_redirect_urls))
-        print("URLs with open redirect vulnerabilities saved to openredirect.txt.")
-else:
-    print("No URLs with open redirect vulnerabilities found.")
+    # Reset the found_keyword flag
+    found_keyword = False
