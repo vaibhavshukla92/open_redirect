@@ -1,6 +1,7 @@
 import re
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+import concurrent.futures
 
 # Disable insecure request warnings
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -24,11 +25,14 @@ parameter_names = [
 with open('urls.txt', 'r') as file:
     urls = file.read().splitlines()
 
-# Check URLs for keywords and test for open redirection
-for url in urls:
+# Initialize a list to store vulnerable URLs
+vulnerable_urls = []
+
+print('Check URLs for keywords and test for open redirection')
+
+def check_url(url):
     found_keyword = False
     redirect_url = 'https://www.google.com'
-
     # Check if URL contains any keyword
     for keyword in parameter_names:
         pattern = r'([?&])(' + re.escape(keyword) + r'=)'
@@ -45,18 +49,33 @@ for url in urls:
             response = requests.get(url, allow_redirects=False, verify=False)
         except requests.exceptions.RequestException as e:
             print('\033[91m[Error]\033[0m', url, '--', str(e))
-            continue
+            return url, False
 
         # Analyze the response to determine vulnerability
-        if response.status_code == 302 and redirect_url in response.headers.get('Location', ''):
+        if 300 <= response.status_code <= 309 and redirect_url in response.headers.get('Location', ''):
             print('\033[91m[Vulnerable]\033[0m', url)  # Print in red for vulnerable ones
+            return url, True
+        elif response.status_code == 301 and redirect_url in response.headers.get('Location', ''):
+            print('\033[91m[Vulnerable]\033[0m', url)  # Print in red for vulnerable ones
+            return url, True
         else:
-            if response.status_code == 301 and redirect_url in response.headers.get('Location', ''):
-                print('\033[91m[Vulnerable]\033[0m', url)  # Print in red for vulnerable ones
-            else: 
-                print('\033[92m[Non-Vulnerable]\033[0m', url)  # Print in green for non-vulnerable ones
+            print('\033[92m[Non-Vulnerable]\033[0m', url)  # Print in green for non-vulnerable ones
+            return url, False
     else:
         print('\033[97m[Ignored]\033[0m', url)  # Print in white for ignored ones
+        return url, False
 
-    # Reset the found_keyword flag
-    found_keyword = False
+# Use ThreadPoolExecutor to run the loops in parallel
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    results = executor.map(check_url, urls)
+
+# Collect the results
+for result in results:
+    url, is_vulnerable = result
+    if is_vulnerable:
+        vulnerable_urls.append(url)
+
+print('Write vulnerable URLs to a file')
+with open('vulnerable.txt', 'w') as file:
+    for url in vulnerable_urls:
+        file.write(url + '\n')
