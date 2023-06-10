@@ -100,6 +100,9 @@ def check_url(url):
                 print('\033[91m[Vulnerable]\033[0m', url_new)  # Print in red for vulnerable ones
                 is_vulnerable = True
                 vulnerable_urls.append(url_new)
+                if url_new in urls:
+                    urls.remove(url_new)
+
                 break
             else:
                 print('\033[92m[Non-Vulnerable]\033[0m', url_new)  # Print in green for non-vulnerable ones
@@ -114,14 +117,6 @@ def check_url(url):
 with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
     results = executor.map(check_url, urls)
 
-# Collect the results
-processed_urls = set()
-for result in results:
-    url, is_vulnerable = result
-    processed_urls.add(url)
-
-# Remove processed URLs from the original list
-urls = list(set(urls) - processed_urls)
 
 print('Write vulnerable URLs to a file')
 with open('vulnerable.txt', 'w') as file:
