@@ -46,7 +46,7 @@ parameter_names = [
     'action', 'action_url', 'Redirect', 'sp_url', 'service', 'recurl',
     'j?url', 'url=//', 'uri', 'u', 'allinurl:', 'q', 'link', 'src', 'tc?src',
     'linkAddress', 'location', 'burl', 'request', 'backurl', 'RedirectUrl',
-    'Redirect', 'ReturnUrl', 'redirecturl', 'checkout_url', 'return_url', 'authorize_callback'
+    'Redirect', 'ReturnUrl', 'redirecturl', 'checkout_url', 'return_url', 'authorize_callback', 'redirect_to'
 ]
 
 # Read URLs from file
