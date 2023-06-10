@@ -4,6 +4,15 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import concurrent.futures
 from urllib.parse import urlparse, parse_qs
 from collections import defaultdict
+import signal
+import sys
+import atexit
+
+
+# Open the file in write mode and truncate the content
+with open('vulnerable.txt', 'w') as file:
+    file.truncate(0)
+
 
 def remove_similar_urls(urls):
     parsed_urls = []
@@ -28,7 +37,15 @@ def remove_similar_urls(urls):
     return unique_urls
 
 
+# Create a flag to track if the program is interrupted
+interrupted = False
 
+def signal_handler(sig, frame):
+    global interrupted
+    interrupted = True
+
+# Set the signal handler
+signal.signal(signal.SIGINT, signal_handler)
 
 
 # Disable insecure request warnings
@@ -46,7 +63,7 @@ parameter_names = [
     'action', 'action_url', 'Redirect', 'sp_url', 'service', 'recurl',
     'j?url', 'url=//', 'uri', 'u', 'allinurl:', 'q', 'link', 'src', 'tc?src',
     'linkAddress', 'location', 'burl', 'request', 'backurl', 'RedirectUrl',
-    'Redirect', 'ReturnUrl', 'redirecturl', 'checkout_url', 'return_url', 'authorize_callback', 'redirect_to'
+    'Redirect', 'ReturnUrl', 'redirecturl', 'checkout_url', 'return_url', 'authorize_callback'
 ]
 
 # Read URLs from file
@@ -102,11 +119,17 @@ def check_url(url):
                 vulnerable_urls.append(url_new)
                 if url_new in urls:
                     urls.remove(url_new)
+                try:
+                    with open('vulnerable.txt', 'a') as file:
+                        file.write(url_new + '\n')
+                    break
+                except:
+                    print('Error occurred while writing vulnerable URLs to the file.')
 
-                break
+
+
             else:
                 print('\033[92m[Non-Vulnerable]\033[0m', url_new)  # Print in green for non-vulnerable ones
-                break
 
     if not found_keyword:
         print('\033[97m[Ignored]\033[0m', url)  # Print in white for ignored ones
@@ -117,8 +140,3 @@ def check_url(url):
 with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
     results = executor.map(check_url, urls)
 
-
-print('Write vulnerable URLs to a file')
-with open('vulnerable.txt', 'w') as file:
-    for url in vulnerable_urls:
-        file.write(url + '\n')
