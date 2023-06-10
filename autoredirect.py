@@ -2,6 +2,34 @@ import re
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import concurrent.futures
+from urllib.parse import urlparse, parse_qs
+from collections import defaultdict
+
+def remove_similar_urls(urls):
+    parsed_urls = []
+    similar_urls = defaultdict(list)
+
+    # Parse and group URLs by path and query parameters
+    for url in urls:
+        parsed_url = urlparse(url)
+        query_params = parse_qs(parsed_url.query)
+
+        # Sort and format query parameters
+        sorted_params = sorted((key, value[0]) for key, value in query_params.items())
+        query_params_str = '&'.join(f'{key}={value}' for key, value in sorted_params)
+
+        key = (parsed_url.path, query_params_str)
+        parsed_urls.append((url, key))
+        similar_urls[key].append(url)
+
+    # Keep only one URL from each group
+    unique_urls = [urls[0] for urls in similar_urls.values()]
+
+    return unique_urls
+
+
+
+
 
 # Disable insecure request warnings
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -24,7 +52,7 @@ parameter_names = [
 # Read URLs from file
 with open('urls.txt', 'r') as file:
     urls = file.read().splitlines()
-
+    urls = remove_similar_urls(urls)
 # Initialize a list to store vulnerable URLs
 vulnerable_urls = []
 
@@ -71,12 +99,10 @@ def check_url(url):
             if 300 <= response.status_code <= 309 and (location.startswith('https://www.google.com') or location.startswith(variation)):
                 print('\033[91m[Vulnerable]\033[0m', url_new)  # Print in red for vulnerable ones
                 is_vulnerable = True
-                print(location)
                 vulnerable_urls.append(url_new)
                 break
             else:
                 print('\033[92m[Non-Vulnerable]\033[0m', url_new)  # Print in green for non-vulnerable ones
-                print(location)
                 break
 
     if not found_keyword:
